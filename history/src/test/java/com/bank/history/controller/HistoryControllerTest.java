@@ -12,9 +12,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.mock.http.client.MockClientHttpResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import javax.persistence.EntityNotFoundException;
 
@@ -87,6 +91,21 @@ public class HistoryControllerTest extends ParentTest {
     }
 
     @Test
+    @DisplayName("чтение по некорректному id, негативный сценарий")
+    void readIncorrectIdNegativeTest() throws Exception {
+
+        doThrow(MethodArgumentTypeMismatchException.class)
+                .when(service)
+                .readById(any());
+
+        mock.perform(get("/api/history/{id}", "NotANumber"))
+                .andExpectAll(
+                        status().isBadRequest(),
+                        content().string("Некорректно указан id")
+                );
+    }
+
+    @Test
     @DisplayName("чтение по нескольким идентификаторам позитивный сценарий")
     void readAllPositiveTest() throws Exception {
         doReturn(Collections.singletonList(history)).when(service).readAllById(any());
@@ -113,6 +132,20 @@ public class HistoryControllerTest extends ParentTest {
         mock.perform(get("/api/history?id=1"))
                 .andExpectAll(status().isNotFound(),
                         content().string(massage)
+                );
+    }
+
+    @Test
+    @DisplayName("чтение по нескольким некорректным id, негативный сценарий")
+    void readAllIncorrectIdNegativeTest() throws Exception {
+
+        doThrow(MethodArgumentTypeMismatchException.class)
+                .when(service)
+                .readAllById(any());
+
+        mock.perform(get("/api/history?id=NitANumber"))
+                .andExpectAll(status().isBadRequest(),
+                        content().string("Некорректно указан id")
                 );
     }
 
@@ -153,6 +186,24 @@ public class HistoryControllerTest extends ParentTest {
     }
 
     @Test
+    @DisplayName("создание некорректного json, негативный сценарий")
+    void saveIncorrectJsonNegativeTest() throws Exception {
+        String message = "Обновление невозможно, некорректные данные!";
+        var httpMessageNotReadableException = new HttpMessageNotReadableException(
+                message, new MockClientHttpResponse(new byte[]{}, HttpStatus.MULTI_STATUS)
+        );
+        doThrow(httpMessageNotReadableException)
+                .when(service)
+                .create(any());
+
+        response = mock.perform(post("/api/history")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpectAll(status().isBadRequest(),
+                        content().string(message));
+    }
+
+    @Test
     @DisplayName("обновление, позитивный сценарий")
     void updatePositiveTest() throws Exception {
         doReturn(history).when(service).update(anyLong(), any());
@@ -186,5 +237,22 @@ public class HistoryControllerTest extends ParentTest {
         response.andExpectAll(status().isNotFound(),
                 content().string(massage)
         );
+    }
+
+    @Test
+    @SuppressWarnings("all")
+    @DisplayName("обновление, некорректный json, негативный сценарий")
+    void updateIncorrectJsonNegativeTest() throws Exception {
+        String message = "Обновление невозможно, некорректные данные!";
+        doThrow(new HttpMessageNotReadableException(message))
+                .when(service)
+                .update(anyLong(), any());
+
+        response = mock.perform(put("/api/history/{id}", ONE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpectAll(status().isBadRequest(),
+                        content().string(message)
+                );
     }
 }
